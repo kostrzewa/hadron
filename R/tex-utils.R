@@ -27,6 +27,7 @@ tex.catwitherror <- function(x, dx, digits=1, with.dollar=TRUE, human.readable=T
   lx <- length(x)
   tmp <- ""
   if(missing(dx) && lx < 2) {
+    if( is.na(x) ) x <- 0.0
     ## just a number without error
     N <- 0
     threshold <- 10^(digits-1)
@@ -40,12 +41,24 @@ tex.catwitherror <- function(x, dx, digits=1, with.dollar=TRUE, human.readable=T
   else {
     ## now we need to typeset the error as well
     err <- 0.
-    if(missing(dx)) err <- x[2]
-    else err <- dx[1]
-    if(lx > 1) x <- x[1]
+    if(missing(dx)){
+      if( !is.na(x[2]) ){
+        err <- x[2]
+      }
+    } else {
+      if( !is.na(dx[1]) ){
+        err <- dx[1]
+      }
+    }
+    if(lx > 1){
+      x <- x[1]
+      if( is.na(x) ){
+        x <- 0.0
+      }
+    }
     N <- 0
     threshold <- 10^(digits-1)
-    while(round(10^N*err) < threshold) {
+    while(round(10^N*err) < threshold & err > 0 ) {
       N <- N+1
     }
     if(human.readable) tmp <- convert.scientific(str=format(round(x, digits=N), nsmall=N), errstr=paste(round(10^N*err)))

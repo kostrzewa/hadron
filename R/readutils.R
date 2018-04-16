@@ -242,8 +242,139 @@ readoutputdata <- function(filename) {
   return(invisible(data))
 }
 
+processcf <- function(dat, Lt, sym, ind.vector, symmetrise, sparsity, avg, Nmin, autotruncate, Nmax){
+  i1 <- c(2:(Lt/2))
+  i2 <- c(T:(Lt/2+2))
+  ii <- c(1:(Lt/2+1))
+  sign <- +1
+  if(!sym) sign <- -1
+
+  dat <- array(dat[[ ind.vector[1] ]] + 1i*dat[[ ind.vector[2] ]], dim=c(Lt, length(dat[[ ind.vector[1] ]])/Lt))
+
+  ## remove unwanted measurements
+  if( Nmax != -1 ){
+    if( ncol(dat) > Nmax ){
+      cat(sprintf("[processcf] Reducing the number of total measurements to %d from %d\n",Nmax,ncol(dat)))
+      dat <- dat[,1:Nmax]
+    }
+  }
+
+  ## make sure that the number of measurements is compatible with any sparsification
+  ## and/or averaging requested
+  if( (sparsity > 1 | avg > 1) & (ncol(dat) %% (sparsity*avg) != 0) ){
+    if(autotruncate){
+      cat(sprintf("[processcf] sparsity=%d, avg=%d, ncol=%d\n",sparsity,avg,ncol(dat)))
+      cat("[processcf] Sparsification and/or averaging requested, but their product does not divide the number of measurements!\n")
+      cat("[processcf] Reducing the number of total measurements to fit!\n")
+      nmeas <- as.integer( (sparsity*avg)*floor( ncol(dat)/(sparsity*avg) ))
+      if( nmeas/(sparsity*avg) >= Nmin ){
+        dat <- dat[,1:nmeas]
+      } else {
+        cat(sprintf("[processcf] After sparsification and averaging, less than %d measurements remain, disabling sparsification and averaging!\n",Nmin))
+        sparsity <- 1
+        avg <- 1
+      }
+    } else {
+      stop("[processcf] Sparsification and/or averaging requested, but their product does not divide the number of measurements!\n")
+    }
+  }
+
+  ## sparsify dat
+  if(sparsity > 1){
+    sp.idx <- seq(from=1,to=ncol(dat),by=sparsity)
+    dat <- dat[,sp.idx]
+  } 
+  # average over 'avg' measurements sequentially
+  if(avg > 1){
+    dat2 <- dat
+    dat <- array(0, dim=c(Lt,ncol(dat2)/avg))
+    for( i in c(1:ncol(dat)) ){
+      dat[,i] <- (1.0/avg)*apply(X=dat2[,((i-1)*avg+1):(i*avg)],
+                                  MARGIN=1,
+                                  FUN=sum)
+    }
+  }
+  
+  ## average +-t
+  if(symmetrise) {
+    dat[i1,] <- 0.5*(dat[i1,] + sign * dat[i2,])
+  }else{
+    ii <- c(1:Lt)
+  }
+
+  ret <- list(cf=t(Re(dat[ii,])), icf=t(Im(dat[ii,])), Time=Lt, nrStypes=1, nrObs=1, boot.samples=FALSE, jackknife.samples=FALSE,
+              symmetrised=symmetrise)
+  attr(ret, "class") <- c("cf", class(ret))
+  return(invisible(ret))
+}
+
+readbsmcf <- function(file, Lt, sym, path, nscalars, 
+                      symmetrise=FALSE, skip=1,
+                      sparsity=1, avg=1, Nmin=4, autotruncate=TRUE,
+                      Nmax=-1){
+  if(missing(file)){
+    stop("files must be given!")
+  }
+  if(missing(Lt)){
+    stop("Lt time extent must be passed!")
+  }
+  if(missing(sym)){
+    stop("Symmetry must be passed!")
+  }
+  if(missing(nscalars)){
+    stop("nscalars must be passed!")
+  }
+
+  tmp <- read.table(file = sprintf("%s/%s", path, file),
+                    header = FALSE,
+                    skip = skip,
+                    col.names = c("t","re","im","gidx","sidx")
+                    )
+
+  gidx <- unique(tmp$gidx)
+  sidx <- unique(tmp$sidx)
+
+  meas_gauges            <- length(unique(tmp$gidx))
+  meas_total             <- nrow(tmp)/Lt
+  meas_scalars_per_gauge <- meas_total / meas_gauges
+
+  cat(sprintf("[readbsmcf] Data has %d scalars per gauge, %d gauges and %d scalars per gauge were requested\n",
+              meas_scalars_per_gauge, meas_gauges, nscalars))
+  if ( meas_scalars_per_gauge > nscalars ){
+    if( meas_scalars_per_gauge %% nscalars != 0 ){
+      stop(sprintf("The requested number of scalars per gauge %d does not divide the actual %d in %s",
+                   nscalars,
+                   meas_scalars_per_gauge))
+    } else {
+      # we use every 'scalar_step' measurement to get the correct number of scalars
+      cat(sprintf("[readbsmcf] Adjusting the number of scalars per gauge from %d to %d as requested\n",meas_scalars_per_gauge,nscalars))
+      scalar_step <- meas_scalars_per_gauge / nscalars
+      sidx <- sidx[ seq(1, length(sidx), scalar_step) ]
+      tmp <- tmp[ which( tmp$sidx %in% sidx ), ]
+    }
+  } else if ( meas_scalars_per_gauge < nscalars ){
+    stop(sprintf("It seems that the number of scalars per gauge in %s does not match the requested %d",
+                 file,
+                 nscalars))
+  }
+  ret <- processcf(dat = tmp,
+                   Lt = Lt, 
+                   sym = sym, 
+                   ind.vector = c(2,3), 
+                   symmetrise = symmetrise,
+                   sparsity = sparsity,
+                   avg = avg,
+                   Nmin = Nmin,
+                   autotruncate = autotruncate,
+                   Nmax = Nmax
+                   )
+  ret$scalars <- sidx
+  ret$gauges <- gidx
+  return(invisible(ret))
+}
+
 readtextcf <- function(file, T=48, sym=TRUE, path="", skip=1, check.t=0, ind.vector=c(2,3), symmetrise=TRUE,
-                       sparsity=1, avg=1, Nmin=4, autotruncate=TRUE) {
+                       sparsity=1, avg=1, Nmin=4, autotruncate=TRUE, Nmax=-1) {
   if(missing(file)) {
     stop("files must be given! Aborting...\n")
   }
@@ -264,60 +395,18 @@ readtextcf <- function(file, T=48, sym=TRUE, path="", skip=1, check.t=0, ind.vec
     stop("T does not devide the number of rows in file, aborting... check value of paramter skip to readtextcf!\n")
   }
   
-  i1 <- c(2:(T/2))
-  i2 <- c(T:(T/2+2))
-  ii <- c(1:(T/2+1))
-  sign <- +1
-  if(!sym) sign <- -1
-
-  tmp <- array(tmp[[ind.vector[1]]] + 1i*tmp[[ind.vector[2]]], dim=c(T, length(tmp[[ind.vector[1]]])/T))
-  if( (sparsity > 1 | avg > 1) & (ncol(tmp) %% (sparsity*avg) != 0) ){
-    if(autotruncate){
-      cat(sprintf("sparsity=%d, avg=%d, ncol=%d\n",sparsity,avg,ncol(tmp)))
-      cat("readtextcf: Sparsification and/or averaging requested, but their product does not divide the number of measurements!\n")
-      cat("readtextcf: Reducing the number of total measurements to fit!\n")
-      nmeas <- as.integer( (sparsity*avg)*floor( ncol(tmp)/(sparsity*avg) ))
-      if( nmeas/(sparsity*avg) >= Nmin ){
-        tmp <- tmp[,1:nmeas]
-      } else {
-        cat(sprintf("readtextcf: After sparsification and averaging, less than %d measurements remain, disabling sparsification and averaging!\n",Nmin))
-        sparsity <- 1
-        avg <- 1
-      }
-    } else {
-      stop("readtextcf: Sparsification and/or averaging requested, but their product does not divide the number of measurements!\n")
-    }
-  }
-
-  ## sparsify data
-  if(sparsity > 1){
-    sp.idx <- seq(from=1,to=ncol(tmp),by=sparsity)
-    tmp <- tmp[,sp.idx]
-  } 
-  # average over 'avg' measurements sequentially
-  if(avg > 1){
-    tmp2 <- tmp
-    tmp <- array(0, dim=c(T,ncol(tmp2)/avg))
-    for( i in c(1:ncol(tmp)) ){
-      tmp[,i] <- (1.0/avg)*apply(X=tmp2[,((i-1)*avg+1):(i*avg)],
-                                 MARGIN=1,
-                                 FUN=sum)
-    }
-  }
-  
-  ## average +-t
-  if(symmetrise) {
-    tmp[i1,] <- 0.5*(tmp[i1,] + sign * tmp[i2,])
-  }else{
-    ii <- c(1:T)
-  }
-
-
-  ret <- list(cf=t(Re(tmp[ii,])), icf=t(Im(tmp[ii,])), Time=T, nrStypes=1, nrObs=1, boot.samples=FALSE, jackknife.samples=FALSE,
-              symmetrised=symmetrise)
-  attr(ret, "class") <- c("cf", class(ret))
-  return(invisible(ret))
+  return(invisible(processcf(dat = tmp,
+                             Lt = T,
+                             sym = sym,
+                             ind.vector = ind.vector,
+                             symmetrise = symmetrise,
+                             sparsity = sparsity,
+                             avg = avg,
+                             Nmin = Nmin,
+                             autotruncate = autotruncate,
+                             Nmax = Nmax)))
 }
+
 
 readbinarycf <- function(files, 
                          T, 
