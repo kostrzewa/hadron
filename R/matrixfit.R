@@ -387,17 +387,12 @@ plot.matrixfit <- function(mfit, plot.errorband=FALSE, ylim, do.qqplot=TRUE, rep
   if(mfit$model == "shifted" && any(names(mfit$cf) == "deltat")) {
     deltat <- mfit$cf$deltat
   }
-  # prevent stray negative values from ruining the plot
-  lbound <- ov.sign.vec*mfit$CF$Cor - 2*mfit$CF$Err
-  lbound <- lbound[ lbound > 0 ]
-  if(missing(ylim)) ylims <- c( min( lbound, na.rm=TRUE ) , max( ov.sign.vec*mfit$CF$Cor + 2*mfit$CF$Err, na.rm=TRUE ) )
-  else ylims <- ylim
 
   if(missing(col)){
     col <- c("black",rainbow(n=(mfit$mSize-1)))
   }
   plotwitherror(x=mfit$CF$t, y=ov.sign.vec*mfit$CF$Cor, 
-                dy=mfit$CF$Err, log="y", ylim=ylims, rep=rep, col=col,...)
+                dy=mfit$CF$Err, log="y", rep=rep, col=col,...)
   tx <- seq(mfit$t1, mfit$t2, 0.05)
   for(i in 1:mfit$mSize ) {
     par.ind <- c(1,parind[(i-1)*Thalfp1+1,1],parind[(i-1)*Thalfp1+1,2])

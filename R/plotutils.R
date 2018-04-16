@@ -1,21 +1,27 @@
 compute.plotlims <- function(val, logscale, cumul.dval, cumul.mdval){
-  tmp <- val - 0.1*abs(val)
-  tmpp <- val + 0.1*abs(val)
+  minlim <- val - 0.1*abs(val)
+  maxlim <- val + 0.1*abs(val)
   if(!is.null(cumul.dval)) {
     # cumul.mdx is implicitly negative
-    tmp <- val+2*apply(X=cumul.mdval,MARGIN=1,FUN=min,na.rm=TRUE)
-    tmpp <- val+2*apply(X=cumul.dval,MARGIN=1,FUN=max,na.rm=TRUE)
+    minlim <- val+2*apply(X=cumul.mdval,MARGIN=1,FUN=min,na.rm=TRUE)
+    maxlim <- val+2*apply(X=cumul.dval,MARGIN=1,FUN=max,na.rm=TRUE)
   }
+  # remove negative values if we're working on a log scale
   if(logscale) {
-    tmp <- tmp[ tmp > 0 ]
-    tmpp <- tmpp[ tmpp > 0 ]
+    minlim <- minlim[ minlim > 0 ]
+    maxlim <- maxlim[ maxlim > 0 ]
   }
-  if( ( all(is.na(tmp)) && all(is.na(tmpp)) ) | ( length(tmp) == 0 & length(tmpp) == 0 ) ){
-    warning("compute.plotlims: log scale requested but there are no positive data, setting default range\n")
-    tmp <- 10^(-6)
-    tmpp <- 10^2
+  if( ( all(is.na(minlim)) && all(is.na(maxlim)) ) | 
+      ( length(minlim) == 0 & length(maxlim) == 0 ) ){
+    warning("[compute.plotlims] log scale requested but there are no positive data, setting default range\n")
+    minlim <- 10^(-6)
+    maxlim <- 10^2
   }
-  range(c(as.vector(tmp),as.vector(tmpp)),na.rm=TRUE)
+  ret <- range(c(as.vector(minlim),as.vector(maxlim)),na.rm=TRUE)
+  if( any(is.na(ret)) | any(is.infinite(ret)) | (ret[1] == ret[2]) ){
+    ret <- c(-1,1)
+  }
+  return(ret)
 }
 
 # there are two possibilities for one-dimensional vectors: the vector class or the array class
