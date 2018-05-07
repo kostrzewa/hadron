@@ -140,6 +140,15 @@ matrixfit <- function(cf, t1, t2, boot.R=400, boot.l=20,
   if(!any(class(cf) == "cf")) {
     stop("matrixfit requires the object to be of class cf! Aborting...!\n")
   }
+
+  if(cf$symmetrised == FALSE){
+    cf <- symmetrise.cf(cf)
+    cf <- bootstrap.cf(cf = cf, 
+                       boot.R = boot.R, 
+                       boot.l = boot.l,
+                       seed = seed)
+  }
+
   t1p1 <- t1+1
   t2p1 <- t2+1
   N <- dim(cf$cf)[1]

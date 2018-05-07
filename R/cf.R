@@ -218,6 +218,16 @@ add.cf <- function(cf1, cf2, a=1., b=1.) {
   }
 }
 
+'*.cf' <- function(cf1, cf2) {
+  if(all(dim(cf1$cf) == dim(cf2$cf)) && cf1$Time == cf2$Time ) {
+    cf <- cf1
+    cf$cf <- cf1$cf * cf2$cf
+    cf <- invalidate.samples.cf(cf)
+
+    return(cf)
+  }
+}
+
 '+.cf' <- function(cf1, cf2) {
   if(all(dim(cf1$cf) == dim(cf2$cf)) && cf1$Time == cf2$Time ) {
     cf <- cf1
@@ -371,7 +381,7 @@ plot.cf <- function(cf, boot.R=400, boot.l=2, neg.vec, rep=FALSE, ...) {
 # invalidating the affected time-slices
 shift.cf <- function(cf,places){
   if(!any(class(cf) == "cf")) {
-    stop(".cf: Input must be of class 'cf'\n")
+    stop("shift.cf: Input must be of class 'cf'\n")
   }
   cf <- invalidate.samples.cf(cf)
   n <- ncol(cf$cf)
@@ -383,6 +393,38 @@ shift.cf <- function(cf,places){
     cf$cf <- cbind( cf$cf[, (places+1):n], cf$cf[, 1:places] )
   }
   return(invisible(cf))
+}
+
+avg.sparsify.cf <- function(cf, avg, sparsity){
+  if(!any(class(cf) == "cf")) {
+    stop("avg.sparsify.cf: Input must be of class 'cf'\n")
+  }
+  if( sparsity > 1 ){
+    stop("avg.sparsify.cf: Sparsification has not been implemented yet, only sparsity = 1 supported for now.\n")
+  }
+  Lt <- cf$Time
+  if(cf$symmetrised){
+    Lt <- cf$Time/2 + 1
+  }
+  nmeas <- length(cf$cf) / Lt
+  targetstats <- nmeas / avg
+ 
+  cf2 <- invalidate.samples.cf(cf)
+  cf2$cf <- cf$cf[1:(targetstats+1),]
+  cf2$icf <- cf$icf[1:(targetstats+1),]
+  
+  for( m_idx in 1:targetstats ){
+    from <- (m_idx-1)*avg + 1
+    to <- m_idx*avg 
+    avg_idx <- c(from:to)
+    cf2$cf[m_idx,] <- apply(X = cf$cf[avg_idx,],
+                            MARGIN = 2,
+                            FUN = sum)/avg
+    cf2$icf[m_idx,] <- apply(X = cf$icf[avg_idx,],
+                             MARGIN = 2,
+                             FUN = sum)/avg
+  }
+  return(cf2)
 }
 
 # when a correlation function is modified, any resampling should be

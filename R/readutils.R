@@ -308,6 +308,53 @@ processcf <- function(dat, Lt, sym, ind.vector, symmetrise, sparsity, avg, Nmin,
   return(invisible(ret))
 }
 
+
+read_bsm_temporal_phifield <- function(file, Lt, sym, path, scalars,
+                                       symmetrise=FALSE,
+                                       sparsity=1, avg=1, Nmin=4, autotruncate=TRUE,
+                                       Nmax=-1)
+{
+  if(missing(file)){
+    stop("files must be given!")
+  }
+  if(missing(Lt)){
+    stop("Lt time extent must be passed!")
+  }
+  if(missing(sym)){
+    stop("Symmetry must be passed!")
+  }
+  
+  tmp <- read.table(file = sprintf("%s/%s", path, file),
+                    header = FALSE,
+                    skip = 0,
+                    col.names = c("t","re","sidx")
+                    )
+
+  # use only the requested scalars in the right order 
+  tmp <- tmp[ which( tmp$sidx %in% scalars ), ]
+  if( any( unique(tmp$sidx) != scalars ) ){
+    stop(sprintf("[read_bsm_temporal_phifield] It was not possible to extract the requested set of scalars from %s\n",file))
+  }
+  
+  tmp <- cbind(tmp,tmp[,3])
+  tmp[,3] <- 0
+
+  ret <- processcf(dat = tmp,
+                   Lt = Lt,
+                   sparsity = sparsity,
+                   avg = avg,
+                   Nmin = Nmin,
+                   Nmax = Nmax,
+                   sym = sym,
+                   symmetrise = symmetrise,
+                   ind.vector = c(2,3),
+                   autotruncate = autotruncate)
+
+  ret$scalars <- scalars
+
+  return(invisible(ret))
+}
+
 readbsmcf <- function(file, Lt, sym, path, nscalars, 
                       symmetrise=FALSE, skip=1,
                       sparsity=1, avg=1, Nmin=4, autotruncate=TRUE,
@@ -359,8 +406,8 @@ readbsmcf <- function(file, Lt, sym, path, nscalars,
   }
   ret <- processcf(dat = tmp,
                    Lt = Lt, 
-                   sym = sym, 
                    ind.vector = c(2,3), 
+                   sym = sym,
                    symmetrise = symmetrise,
                    sparsity = sparsity,
                    avg = avg,
@@ -368,8 +415,8 @@ readbsmcf <- function(file, Lt, sym, path, nscalars,
                    autotruncate = autotruncate,
                    Nmax = Nmax
                    )
-  ret$scalars <- sidx
-  ret$gauges <- gidx
+  ret$scalars <- sidx[1:Nmax]
+  ret$gauges <- gidx[1:as.integer(Nmax/avg)]
   return(invisible(ret))
 }
 
