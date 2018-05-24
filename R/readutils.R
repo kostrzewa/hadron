@@ -324,6 +324,9 @@ read_bsm_temporal_phifield <- function(file, Lt, sym, path, scalars,
     stop("Symmetry must be passed!")
   }
   
+  cat(sprintf("[read_bsm_temporal_phifield] Attempting to read spatially averaged phi field %s\n",
+              file))
+
   tmp <- read.table(file = sprintf("%s/%s", path, file),
                     header = FALSE,
                     skip = 0,
