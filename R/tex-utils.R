@@ -56,17 +56,21 @@ tex.catwitherror <- function(x, dx, digits=1, with.dollar=TRUE, human.readable=T
         x <- 0.0
       }
     }
+
     N <- 0
     threshold <- 10^(digits-1)
     while(round(10^N*err) < threshold & err > 0 ) {
       N <- N+1
     }
+
     # if the error is large it may exceed the number of digits that one actually desires
     # also, the error may be larger or similar in size to the value itself
     # in these cases, we display it in the same format as the value, rounded to the
     # desired number of digits
     displayerr <- paste(round(10^N*err))
-    if( nchar(displayerr) > digits | ceiling(log10(abs(err/x))) >= 1 ){
+    if( nchar(displayerr) > digits |
+        ( ceiling(log10(abs(err)/abs(x))) >= 0 && ( abs(err) >= 1.0 ) ) |
+        ( abs(err) >= abs(10*x) ) ){
       displayerr <- paste(format(round(err, digits=N)))
     }
 
